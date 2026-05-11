@@ -833,6 +833,19 @@ function HUD({ player, stats, color, side }: { player: number, stats: PlayerStat
                     </motion.div>
                 )}
 
+                {stats.driftCombo > 0.1 && (
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-black/60 backdrop-blur-md px-6 py-2 rounded-2xl border-2 border-arcade-blue/50 mb-2 flex flex-col items-center shadow-xl"
+                    >
+                        <span className="text-arcade-blue font-black text-[10px] tracking-widest uppercase">Combo</span>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-white font-black text-2xl italic">x{Math.floor(stats.driftCombo * 10) / 10}</span>
+                        </div>
+                    </motion.div>
+                )}
+
                 {/* Turbo Bar */}
                 {stats.isDrifting && (
                     <motion.div 

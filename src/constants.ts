@@ -57,6 +57,8 @@ export interface PlayerStats {
   boostTime: number;
   turboStage: number; // 0, 1, 2, 3
   turboCharge: number; 
+  driftCombo: number;
+  boostSpeedMultiplier: number;
   effectTimer: number;
   activeEffect: PowerUpType | null;
   isWrongWay: boolean;

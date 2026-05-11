@@ -33,6 +33,8 @@ export class Car {
       boostTime: 0,
       turboStage: 0,
       turboCharge: 0,
+      driftCombo: 0,
+      boostSpeedMultiplier: 1,
       effectTimer: 0,
       activeEffect: null,
       isWrongWay: false,
@@ -157,8 +159,8 @@ export class Car {
       maxSpeed *= (this.id === 2 ? 0.3 : 0.4);
     }
     if (this.stats.boostTime > 0) {
-      maxSpeed *= GAME_CONFIG.boostMultiplier;
-      accel *= 4;
+      maxSpeed *= GAME_CONFIG.boostMultiplier * (this.stats.boostSpeedMultiplier || 1);
+      accel *= 5;
     }
     if (this.stats.activeEffect === PowerUpType.INVERTED_STEERING) {
       steer *= -1;
@@ -176,6 +178,7 @@ export class Car {
     }
 
     if (this.stats.activeEffect === PowerUpType.AUTOPILOT) {
+        maxSpeed *= 1.15; // Autopilot is 15% faster
         moveForward = true;
         moveBackward = false;
         
@@ -220,26 +223,40 @@ export class Car {
         this.driftAngle = THREE.MathUtils.clamp(this.driftAngle, -Math.PI/3.2, Math.PI/3.2);
         this.stats.driftTime += dt;
 
-        // Build up Turbo (تفحيط تيربو)
+        // Build up Turbo (تفحيط تيربو) - Easier to charge
         this.stats.turboCharge += dt;
-        if (this.stats.turboCharge > 1.5) this.stats.turboStage = 3;
-        else if (this.stats.turboCharge > 1.0) this.stats.turboStage = 2;
-        else if (this.stats.turboCharge > 0.5) this.stats.turboStage = 1;
+        if (this.stats.turboCharge > 1.0) this.stats.turboStage = 3;
+        else if (this.stats.turboCharge > 0.6) this.stats.turboStage = 2;
+        else if (this.stats.turboCharge > 0.3) this.stats.turboStage = 1;
         else this.stats.turboStage = 0;
 
       } else {
         if (this.stats.isDrifting) {
             // Release Turbo Boost
             if (this.stats.turboStage > 0) {
-                this.stats.boostTime = this.stats.turboStage === 3 ? 1.8 : (this.stats.turboStage === 2 ? 1.2 : 0.6);
-            } else if (this.stats.driftTime > 0.4) {
-                this.stats.boostTime = 0.4;
+                // Increase combo and boost speed
+                this.stats.driftCombo = Math.min(this.stats.driftCombo + 1, 5); 
+                this.stats.boostSpeedMultiplier = 1 + (this.stats.driftCombo * 0.15); // Each combo adds 15% speed
+                
+                // Longer boost times
+                this.stats.boostTime = this.stats.turboStage === 3 ? 2.5 : (this.stats.turboStage === 2 ? 1.6 : 1.0);
+            } else if (this.stats.driftTime > 0.2) {
+                this.stats.boostTime = 0.6;
+                this.stats.boostSpeedMultiplier = 1.1;
+                this.stats.driftCombo = Math.max(0, this.stats.driftCombo - 1); // Small decay if weak drift
             }
             this.stats.isDrifting = false;
             this.stats.driftTime = 0;
             this.stats.turboCharge = 0;
             this.stats.turboStage = 0;
             this.driftAngle = 0;
+        } else if (this.stats.boostTime <= 0) {
+            // Decay combo when not drifting or boosting
+            if (this.stats.driftCombo > 0) {
+                this.stats.driftCombo -= dt * 0.5; // Combo resets slowly over time
+                if (this.stats.driftCombo < 0) this.stats.driftCombo = 0;
+                this.stats.boostSpeedMultiplier = 1 + (this.stats.driftCombo * 0.15);
+            }
         }
         this.rotation += turnDir * steer * Math.min(speedFactor * 1.8 * steeringBuff, 1.5);
         this.driftAngle *= 0.85;
