@@ -54,16 +54,17 @@ export default function App() {
     let timeoutId: any;
 
     const start = () => {
-      if (gameState === 'PLAYING' && canvasRef.current) {
+      const canvas = canvasRef.current;
+      if (gameState === 'PLAYING' && canvas) {
         const width = window.innerWidth;
         const height = window.innerHeight;
         
-        if (width === 0 || height === 0) {
+        if (width <= 0 || height <= 0) {
             timeoutId = setTimeout(start, 50);
             return;
         }
 
-        const gm = new GameManager(canvasRef.current, trackId, mode, aiDifficulty, usePowerUps, totalLaps);
+        const gm = new GameManager(canvas, trackId, mode, aiDifficulty, usePowerUps, totalLaps);
         gameManagerRef.current = gm;
         setTrackPoints(gm.track.points);
 
@@ -136,7 +137,14 @@ export default function App() {
     };
 
     if (gameState === 'PLAYING') {
-        timeoutId = setTimeout(start, 100); 
+        const checkReady = () => {
+          if (canvasRef.current) {
+            start();
+          } else {
+            timeoutId = setTimeout(checkReady, 50);
+          }
+        };
+        checkReady();
     }
 
     return () => {
@@ -149,7 +157,7 @@ export default function App() {
   }, [gameState, trackId, mode]);
 
   return (
-    <div className="w-full h-full min-h-[100dvh] bg-slate-950 text-slate-50 font-sans overflow-hidden select-none flex flex-col">
+    <div className="fixed inset-0 w-full h-full bg-slate-950 text-slate-50 font-sans overflow-hidden select-none flex flex-col">
       <AnimatePresence>
         {isMobile && isPortrait && (
           <motion.div 
@@ -264,7 +272,7 @@ export default function App() {
                       whileHover={item.disabled ? {} : { scale: 1.02, y: -5 }}
                       whileTap={item.disabled ? {} : { scale: 0.98 }}
                       disabled={item.disabled}
-                      onClick={() => { setMode(item.id as GameMode); }}
+                      onPointerDown={(e) => { if (!item.disabled) { e.preventDefault(); setMode(item.id as GameMode); } }}
                       className={`p-10 rounded-[2.5rem] border-4 transition-all flex flex-col items-center gap-6 relative overflow-hidden ${
                           mode === item.id 
                           ? `bg-arcade-${item.color}/20 border-arcade-${item.color} shadow-[0_0_40px_rgba(0,0,0,0.3)]` 
@@ -372,8 +380,12 @@ export default function App() {
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: i * 0.1 }}
                  whileHover={{ scale: 1.05, y: -10 }}
-                 onClick={() => { setTrackId(t.id); setGameState('PLAYING'); }}
-                 className="group relative flex flex-col bg-slate-900 rounded-[2.5rem] border-4 border-slate-800 overflow-hidden cursor-pointer hover:border-arcade-amber transition-all shadow-2xl"
+                 onPointerDown={(e) => { 
+                    e.preventDefault();
+                    setTrackId(t.id); 
+                    setGameState('PLAYING'); 
+                 }}
+                 className="group relative flex flex-col bg-slate-900 rounded-[2.5rem] border-4 border-slate-800 overflow-hidden cursor-pointer hover:border-arcade-amber transition-all shadow-2xl active:scale-95"
                >
                  <div className="w-full h-56 relative overflow-hidden flex items-center justify-center" style={{ backgroundColor: t.color }}>
                     <div className="absolute inset-0 bg-black/10 mix-blend-overlay" />
@@ -630,7 +642,7 @@ function MenuButton({ icon, label, onClick, primary = false }: { icon: React.Rea
         <motion.button
             whileHover={{ scale: 1.05, x: 10 }}
             whileTap={{ scale: 0.95 }}
-            onClick={onClick}
+            onPointerDown={(e) => { e.preventDefault(); onClick(); }}
             className={`group relative flex items-center justify-center gap-4 px-10 py-6 rounded-2xl font-black uppercase tracking-tighter transition-all skew-slanted ${
                 primary 
                 ? "bg-arcade-blue text-white shadow-[0_8px_0_#1d4ed8] hover:shadow-[0_12px_0_#1d4ed8] hover:-translate-y-1 active:translate-y-1 active:shadow-none" 
@@ -818,6 +830,54 @@ function HUD({ player, stats, color, side }: { player: number, stats: PlayerStat
                     >
                         <span className="text-2xl leading-none drop-shadow-sm">{POWERUP_ICONS[stats.activeEffect]}</span>
                         {stats.activeEffect.replace('_', ' ')}
+                    </motion.div>
+                )}
+
+                {/* Turbo Bar */}
+                {stats.isDrifting && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex flex-col items-center gap-2 mb-4"
+                    >
+                        <div className="flex gap-1">
+                            {[1, 2, 3].map(level => (
+                                <div 
+                                    key={level}
+                                    className={`w-8 h-2 rounded-full transition-all duration-300 ${
+                                        stats.turboStage >= level 
+                                        ? (level === 3 ? 'bg-arcade-rose shadow-[0_0_10px_#f43f5e]' : 
+                                           level === 2 ? 'bg-arcade-amber shadow-[0_0_8px_#f59e0b]' : 
+                                           'bg-arcade-blue shadow-[0_0_6px_#3b82f6]')
+                                        : 'bg-white/10'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                        <div className={`text-[10px] font-black tracking-tighter uppercase italic px-3 py-1 rounded-md border border-white/10 ${
+                            stats.turboStage === 3 ? 'text-arcade-rose' : 
+                            stats.turboStage === 2 ? 'text-arcade-amber' : 
+                            stats.turboStage === 1 ? 'text-arcade-blue' : 'text-slate-400'
+                        }`}>
+                            {stats.turboStage === 3 ? 'MAX TURBO!!' : 
+                             stats.turboStage === 2 ? 'TURBO L2' : 
+                             stats.turboStage === 1 ? 'TURBO L1' : 'DRIFTING...'}
+                        </div>
+                    </motion.div>
+                )}
+
+                {stats.boostTime > 0 && (
+                    <motion.div 
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: [1, 1.2, 1], opacity: 1 }}
+                        transition={{ repeat: Infinity, duration: 0.3 }}
+                        className={`mb-4 px-10 py-3 rounded-2xl font-black uppercase text-xl tracking-[0.2em] italic skew-x-[-12deg] border-4 shadow-2xl transition-colors ${
+                            stats.turboStage >= 3 ? 'bg-arcade-rose border-white text-white shadow-arcade-rose/50' :
+                            stats.turboStage >= 2 ? 'bg-arcade-amber border-white text-arcade-rose shadow-arcade-amber/50' :
+                            'bg-arcade-blue border-white text-white shadow-arcade-blue/50'
+                        }`}
+                    >
+                        {stats.turboStage >= 3 ? 'ULTRA BOOST!!!' : 'BOOST!'}
                     </motion.div>
                 )}
 

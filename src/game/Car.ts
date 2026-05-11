@@ -15,6 +15,7 @@ export class Car {
   };
   id: number;
   
+  private flames: THREE.Mesh[] = [];
   private driftAngle: number = 0;
   private driftDirection: number = 0;
   private checkpointIndex: number = 0;
@@ -30,6 +31,8 @@ export class Car {
       isDrifting: false,
       driftTime: 0,
       boostTime: 0,
+      turboStage: 0,
+      turboCharge: 0,
       effectTimer: 0,
       activeEffect: null,
       isWrongWay: false,
@@ -62,6 +65,26 @@ export class Car {
       const wheel = new THREE.Mesh(wheelGeom, wheelMat);
       wheel.position.set(pos[0], pos[1], pos[2]);
       this.mesh.add(wheel);
+    });
+
+    // Exhaust Thrusters (Boost Flames)
+    const flameGeo = new THREE.ConeGeometry(0.2, 0.8, 8);
+    const flameMat = new THREE.MeshStandardMaterial({ 
+        color: 0x00ffff, 
+        emissive: 0x00ffff,
+        emissiveIntensity: 2,
+        transparent: true,
+        opacity: 0.8
+    });
+    this.flames = [];
+    [[-0.4, 0.4, -1.1], [0.4, 0.4, -1.1]].forEach(pos => {
+        const flame = new THREE.Mesh(flameGeo, flameMat.clone());
+        flame.position.set(pos[0], pos[1], pos[2]);
+        flame.rotation.x = -Math.PI / 2;
+        flame.scale.set(0.1, 0.1, 0.1); 
+        flame.visible = false;
+        this.mesh.add(flame);
+        this.flames.push(flame);
     });
 
     this.mesh.position.copy(startPos);
@@ -196,13 +219,26 @@ export class Car {
         this.driftAngle += turnDir * 0.06;
         this.driftAngle = THREE.MathUtils.clamp(this.driftAngle, -Math.PI/3.2, Math.PI/3.2);
         this.stats.driftTime += dt;
+
+        // Build up Turbo (تفحيط تيربو)
+        this.stats.turboCharge += dt;
+        if (this.stats.turboCharge > 1.5) this.stats.turboStage = 3;
+        else if (this.stats.turboCharge > 1.0) this.stats.turboStage = 2;
+        else if (this.stats.turboCharge > 0.5) this.stats.turboStage = 1;
+        else this.stats.turboStage = 0;
+
       } else {
         if (this.stats.isDrifting) {
-            if (this.stats.driftTime > 0.6) { // Easier boost
-                this.stats.boostTime = 0.8;
+            // Release Turbo Boost
+            if (this.stats.turboStage > 0) {
+                this.stats.boostTime = this.stats.turboStage === 3 ? 1.8 : (this.stats.turboStage === 2 ? 1.2 : 0.6);
+            } else if (this.stats.driftTime > 0.4) {
+                this.stats.boostTime = 0.4;
             }
             this.stats.isDrifting = false;
             this.stats.driftTime = 0;
+            this.stats.turboCharge = 0;
+            this.stats.turboStage = 0;
             this.driftAngle = 0;
         }
         this.rotation += turnDir * steer * Math.min(speedFactor * 1.8 * steeringBuff, 1.5);
@@ -250,6 +286,60 @@ export class Car {
     }
 
     this.mesh.position.copy(nextPos);
+
+    // Visual Boost Effect (Tilted & Slightly Larger)
+    if (this.stats.boostTime > 0) {
+        this.mesh.scale.set(1.08, 1.08, 1.08);
+        this.mesh.rotation.x = -0.08 * Math.sin(Date.now() * 0.05);
+
+        // Update Flames
+        const flameScale = 0.5 + Math.random() * 0.5;
+        const turboColor = this.stats.turboStage === 3 ? 0xff0066 : 0x00ffff;
+        
+        this.flames.forEach(f => {
+            f.visible = true;
+            f.scale.set(flameScale, flameScale * 1.5, flameScale);
+            (f.material as THREE.MeshStandardMaterial).emissive.setHex(turboColor);
+            (f.material as THREE.MeshStandardMaterial).color.setHex(turboColor);
+        });
+
+        this.mesh.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh && !this.flames.includes(child as THREE.Mesh)) {
+                const material = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+                if (material.emissive) {
+                    material.emissive.setHex(this.stats.turboStage === 3 ? 0xff0066 : 0x00ffff);
+                    material.emissiveIntensity = 0.5 + 0.5 * Math.sin(Date.now() * 0.1);
+                }
+            }
+        });
+    } else if (this.stats.isDrifting) {
+        this.mesh.scale.set(1, 1, 1);
+        this.flames.forEach(f => f.visible = false);
+        
+        this.mesh.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+                const material = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+                if (material.emissive) {
+                    const turboLevelColor = this.stats.turboStage === 3 ? 0xff0066 : 
+                                            (this.stats.turboStage === 2 ? 0xffaa00 : 
+                                            (this.stats.turboStage === 1 ? 0x00ffff : 0x000000));
+                    material.emissive.setHex(turboLevelColor);
+                    material.emissiveIntensity = this.stats.turboStage > 0 ? 0.3 : 0;
+                }
+            }
+        });
+    } else {
+        this.mesh.scale.set(1, 1, 1);
+        this.mesh.rotation.x = 0;
+        this.flames.forEach(f => f.visible = false);
+        
+        this.mesh.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+                const material = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+                if (material.emissive) material.emissiveIntensity = 0;
+            }
+        });
+    }
   }
 
   private checkTrackProgress(trackPoints: THREE.Vector3[]) {

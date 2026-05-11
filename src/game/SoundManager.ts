@@ -3,7 +3,11 @@ class SoundManager {
 
   init() {
     if (this.ctx) return;
-    this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    try {
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    } catch (err) {
+      console.warn("AudioContext init failed", err);
+    }
   }
 
   playPickUp() {

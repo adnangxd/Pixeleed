@@ -55,6 +55,8 @@ export interface PlayerStats {
   isDrifting: boolean;
   driftTime: number;
   boostTime: number;
+  turboStage: number; // 0, 1, 2, 3
+  turboCharge: number; 
   effectTimer: number;
   activeEffect: PowerUpType | null;
   isWrongWay: boolean;
